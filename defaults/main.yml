@@ -1,0 +1,31 @@
+role_name: oracle_java
+
+# As of 14 Mar 2016, tested with versions Java 8u60, 8u73, and 8u74
+
+# JDK version to install
+java_version: 8u73
+
+# Java install directory
+java_install_dir: /usr/lib/jvm
+
+# details is a list of key-value pairs for each Java version
+# 1. The 'version_string' variable comes from the stderr of 'javac -v'
+# 2. Download URL and tarball_name change with each Java update and must be manually verified
+
+details:
+  8u60:
+    version_string: "1.8.0_60"
+    version_dirname: "jdk1.8.0_60"
+    download_url: http://download.oracle.com/otn-pub/java/jdk/8u60-b27/jdk-8u60-linux-x64.tar.gz
+    tarball_name: "jdk-8u60-linux-x64.tar.gz"
+  8u73:
+    version_string: "1.8.0_73"
+    version_dirname: "jdk1.8.0_73"
+    download_url: http://download.oracle.com/otn-pub/java/jdk/8u73-b02/jdk-8u73-linux-x64.tar.gz
+    tarball_name: "jdk-8u73-linux-x64.tar.gz"
+  8u74:
+    version_string: "1.8.0_74"
+    version_dirname: "jdk1.8.0_74"
+    download_url: http://download.oracle.com/otn-pub/java/jdk/8u74-b02/jdk-8u74-linux-x64.tar.gz
+    tarball_name: "jdk-8u74-linux-x64.tar.gz"
+

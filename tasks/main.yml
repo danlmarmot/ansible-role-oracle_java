@@ -1,0 +1,133 @@
+---
+- name: Starting oracle_java role
+  debug:
+    msg: "{{ lookup('pipe','date') }}"
+
+# Look for the shared_folder variable for Vagrant-based installs
+- name: Look for Vagrant shared folder
+  stat: path=/home/vagrant/shared/installers/
+  register: shared_folder
+
+- name: Default to installing Java
+  set_fact:
+    java_install_flag: true
+
+- name: Don't install from local by default
+  set_fact:
+    install_from_local: false
+
+- name: Get current javac version
+  command: javac -version
+  register: javac_version_cmd
+  ignore_errors: yes
+  changed_when: false
+
+# Note this is a workaround for the 'when' statement in the java_install_flag play that is two tasks down
+- name: Set fact for java_version_string
+  set_fact:
+    java_version_string_fact: "javac {{ details[java_version].version_string }}"
+
+- name: Set java_install_flag to false if java version is already installed
+  set_fact:
+    java_install_flag: false
+  when: javac_version_cmd.rc != 2 and (java_version_string_fact == javac_version_cmd.stderr)
+
+# For Vagrant managed hosts
+- name: Check to see if we should use locally available Java installer (Vagrant)
+  set_fact:
+    install_from_local: true
+  when: shared_folder.stat.exists and java_install_flag == true and "vagrant_managed" in group_names
+
+- name: Set role cache directory (Vagrant)
+  set_fact:
+    role_cache_dir: /home/vagrant/shared/installers/{{ role_name }}-role
+  when: java_install_flag and install_from_local
+
+- name: Ensure directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+  with_items:
+    - "{{ role_cache_dir }}"
+  when: java_install_flag and install_from_local
+
+# Ensure installer is local, download if not present
+- name: Check for local installer (Vagrant)
+  stat: path={{ role_cache_dir }}/{{ details[java_version].tarball_name }}
+  register: java_installer_filepath
+  when: java_install_flag and install_from_local
+
+- name: Get installer if not present (Vagrant)
+  command: "wget --header 'Cookie: oraclelicense=accept-securebackup-cookie' {{ details[java_version].download_url }} -O {{ role_cache_dir }}/{{ details[java_version].tarball_name }} --no-clobber"
+  when: java_install_flag and install_from_local and java_installer_filepath.stat.exists == false
+  
+- name: Copy installer to /tmp (Vagrant)
+  command: "cp {{ role_cache_dir }}/{{ details[java_version].tarball_name }} /tmp/{{ details[java_version].tarball_name }}"
+  when: java_install_flag and install_from_local
+
+- name: Get installer (Non-vagrant)
+  command: "wget --header 'Cookie: oraclelicense=accept-securebackup-cookie' {{ java_download_url }} -O /tmp/{{ details[java_version].tarball_name }} --no-clobber"
+  when: java_install_flag and not install_from_local
+
+- name: Ensure install directory exists
+  file:
+    path: "{{ java_install_dir }}"
+    state: directory
+  when: java_install_flag
+
+- name: Unpack archive (if not already present)
+  #command: "tar -zxf /tmp/{{ tarball_name }} -C {{ java_install_dir }}"
+  unarchive:
+    copy: no
+    src: "/tmp/{{ details[java_version].tarball_name }}"
+    dest: "{{ java_install_dir }}"
+    creates: "{{ java_install_dir }}/{{ details[java_version].version_dirname }}"
+  when: java_install_flag
+
+- name: Fix ownership
+  file:
+    state: directory
+    path: "{{ java_install_dir }}/{{ details[java_version].version_dirname }}"
+    owner: root
+    group: root
+    recurse: yes
+  when: java_install_flag
+
+- name: Set alternative for java
+  alternatives:
+    name: java
+    link: "/usr/bin/java"
+    path: "{{ java_install_dir }}/{{ details[java_version].version_dirname }}/bin/java"
+  when: java_install_flag
+
+- name: Set alternative for javac
+  alternatives:
+    name: javac
+    link: "/usr/bin/javac"
+    path: "{{ java_install_dir }}/{{ details[java_version].version_dirname }}/bin/javac"
+  when: java_install_flag
+
+- name: Set JAVA_HOME environment variable
+  lineinfile:
+    dest: /etc/environment
+    regexp: ^export\sJAVA_HOME
+    line: "export JAVA_HOME={{ java_install_dir }}/{{ details[java_version].version_dirname }}"
+  when: java_install_flag and ansible_os_family == 'Debian'
+
+- name: Set JAVA_HOME environment variable
+  lineinfile:
+    dest: /etc/environment
+    regex: ^export\sJAVA_HOME
+    line: "export JAVA_HOME={{ java_install_dir }}/{{ details[java_version].version_dirname }}"
+  become: yes
+  become_method: sudo
+  when: java_install_flag and ansible_os_family == 'RedHat'
+
+- name: Remove tarball from tmp directory
+  file:
+    path: "/tmp/{{ details[java_version].tarball_name }}"
+    state: absent
+
+- name: Finish java role
+  debug:
+    msg: "{{ lookup('pipe','date') }}"
